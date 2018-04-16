@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # DEMO for University of Nottingham Science Fair (18-20th April 2018)
 #   (Educational use.)
 #
@@ -8,7 +10,6 @@
 # Requires GrovePi sensor board, ultrasonic sensor, 3 x PIR sensors, 
 #   2 x light sensors
 #
-#!/usr/bin/env python
 
 from scipy.io import wavfile
 import argparse
