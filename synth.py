@@ -7,8 +7,8 @@
 #   http://zulko.github.io/blog/2014/03/29/soundstretching-and-pitch-shifting-in-python/
 #   https://github.com/Zulko/pianoputer
 #
-# Requires GrovePi sensor board, ultrasonic sensor, 3 x PIR sensors, 
-#   2 x light sensors
+# Requires GrovePi sensor board, ultrasonic sensor, PIR sensor, 
+#   and either 2 x light sensors or 2 x PIR sensors for drums
 #
 
 from scipy.io import wavfile
@@ -35,9 +35,18 @@ US_MAX = 60
 US_MIN = 1
 
 # Light sensor max and min calibration values
-L_MAX = 750
+L_MAX = 400#750
 L_MIN = 70
 L_DELTA = (L_MAX - L_MIN) / 2
+
+
+MELODY_ULTRASONIC_PIN   = 2
+KICK_LDR_PIN            = 0
+SNARE_LDR_PIN           = 1
+KICK_PIR_PIN            = 5
+SNARE_PIR_PIN           = 6
+DRONE_PIR_PIN           = 4
+
 
 def speedx(snd_array, factor):
     """ Speeds up / slows down a sound, by some factor. """
@@ -300,9 +309,14 @@ def main(threads):
     drone = pygame.mixer.Sound(args.wavdrone.name)
     kick = pygame.mixer.Sound(args.wavkick.name)
     snare = pygame.mixer.Sound(args.wavsnare.name)
-    kick.set_volume(0.4)
-    snare.set_volume(0.4)
-    drone.set_volume(0.3)
+    kick.set_volume(1)
+    snare.set_volume(1)
+    drone.set_volume(0.5)
+
+    #TEMP
+    #kick.play()
+    #exit()
+
 
     tones = range(-int(np.floor(args.notes/2)), int(np.ceil(args.notes/2)))
     sys.stdout.write('Transposing sound file... ')
@@ -398,9 +412,10 @@ def main(threads):
 
 if __name__ == '__main__':
 
-    mldythread = mldycontrol(2)
-    dronethread = dronecontrol(3)
-    drumthread = drumcontrol(pirpins=(7,8), ldrpins=(1,2))
+    mldythread = mldycontrol(MELODY_ULTRASONIC_PIN)
+    dronethread = dronecontrol(DRONE_PIR_PIN)
+    drumthread = drumcontrol(pirpins=(KICK_PIR_PIN,SNARE_PIR_PIN), 
+                             ldrpins=(KICK_LDR_PIN,SNARE_LDR_PIN))
 
     try:
         main({'mldythread' : mldythread, 
