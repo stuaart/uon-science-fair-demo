@@ -8,7 +8,7 @@
 #   https://github.com/Zulko/pianoputer
 #
 # Requires GrovePi sensor board, ultrasonic sensor, PIR sensor, 
-#   and either 2 x light sensors or 2 x PIR sensors for drums
+#   2 x light sensors, 3 LEDs
 #
 
 from scipy.io import wavfile
@@ -20,7 +20,7 @@ import warnings
 import threading
 import time
 import random
-import grovepi
+import grovepi#, grove6axis as g6a
 import os, sys
 
 MELODY     = pygame.USEREVENT + 1
@@ -35,16 +35,6 @@ US_MIN = 1
 
 CALIB_STEPS = 4
 
-
-MELODY_ULTRASONIC_PIN   = 2 #D2
-KICK_LDR_PIN            = 0 #A0
-KICK_LED_PIN            = 8 #D8
-SNARE_LDR_PIN           = 1 #A1
-SNARE_LED_PIN           = 7 #D7
-KICK_PIR_PIN            = 5 
-SNARE_PIR_PIN           = 6
-DRONE_PIR_PIN           = 4 #D4
-DRONE_LED_PIN           = 3 #D3
 
 
 def calibldr(pin, lmin, lmax):
@@ -206,12 +196,12 @@ class dronecontrol(threading.Thread):
             if self.pval == 0 and pval == 1:
                 pygame.event.post(pygame.event.Event(DRONE_ON))
                 self.pval = pval
-                print("DRONE triggered      [filtered value (>=0.4): ",pvalf,"]")
+                print("DRONE triggered        [filtered value (>=0.4): ",pvalf,"]")
                 grovepi.digitalWrite(self.ledpin, 1)
             elif self.pval == 1 and pval == 0 and pvalf < 0.4:
                 pygame.event.post(pygame.event.Event(DRONE_OFF))
                 self.pval = pval
-                print("DRONE off            [filtered value (<0.4): ",pvalf,"]")
+                print("DRONE off              [filtered value (<0.4): ",pvalf,"]")
                 grovepi.digitalWrite(self.ledpin, 0)
             time.sleep(self.res)
 
@@ -224,9 +214,9 @@ class drumcontrol(threading.Thread):
     sd = 500
     kd = 500
 
-    def __init__(self, pirpins, ldrpins, res=0.1):
+    def __init__(self, ldrpins, ledpins, res=0.1):
         threading.Thread.__init__(self)
-        self.pirpins = pirpins
+        self.ledpins = ledpins
         self.ldrpins = ldrpins
     
     def setcalib(self, kmax, kd, smax, sd):
@@ -242,18 +232,9 @@ class drumcontrol(threading.Thread):
         self.kill = 1
     
     def run(self):
-        p1val = [0, 0]
-        p2val = [0, 0]
-        qp1 = 0
-        qp2 = 0
         while self.kill != 1:
-            # PIR kick and snare
-            #p1val_ = grovepi.digitalRead(self.pirpins[0])
-            #p2val_ = grovepi.digitalRead(self.pirpins[1])
             
             # LDR kick and snare
-            l1val_ = 0
-            l2val_ = 0
             l1val_ = grovepi.analogRead(self.ldrpins[0])
             l2val_ = grovepi.analogRead(self.ldrpins[1])
 
@@ -261,35 +242,25 @@ class drumcontrol(threading.Thread):
             if l1val_ < self.kmax and l1val_ > self.l1val:
                 self.l1val = l1val_
             elif self.l1val - l1val_ > self.kd:
-                grovepi.digitalWrite(KICK_LED_PIN, 1)
+                grovepi.digitalWrite(self.ledpins[0], 1)
                 pygame.event.post(pygame.event.Event(KICK))
-                print("KICK triggered by LDR       [value: ",l1val_,"]")
+                print("KICK triggered by LDR       [value: ",
+                        l1val_, "; delta: ", self.l1val-l1val_, "]")
                 self.l1val = l1val_
 
             if l2val_ < self.smax and l2val_ > self.l2val:
                 self.l2val = l2val_
             elif self.l2val - l2val_ > self.sd:
-                grovepi.digitalWrite(SNARE_LED_PIN, 1)
+                grovepi.digitalWrite(self.ledpins[1], 1)
                 pygame.event.post(pygame.event.Event(SNARE))
-                print("SNARE triggered by LDR       [value: ",l2val_,"]")
+                print("SNARE triggered by LDR       [value: ",
+                        l2val_, "; delta: ", self.l2val-l2val_, "]")
                 self.l2val = l2val_
-
-            '''if p1val == [0, 0] and p1val_ == 1:
-                pygame.event.post(pygame.event.Event(KICK))
-                print("KICK triggered by PIR       [value: ",p1val_,"]")
-            p1val[qp1] = p1val_
-            qp1 = (qp1 + 1) % 2
-            
-            if p2val == [0, 0] and p2val_ == 1:
-                pygame.event.post(pygame.event.Event(SNARE))
-                print("SNARE triggered by PIR      [value: ",p2val_,"]")
-            p2val[qp2] = p2val_
-            qp2 = (qp2 + 1) % 2'''
 
             time.sleep(self.res)
 
-            grovepi.digitalWrite(KICK_LED_PIN, 0)
-            grovepi.digitalWrite(SNARE_LED_PIN, 0)
+            for pin in self.ledpins:
+                grovepi.digitalWrite(pin, 0)
 
 
 class mldycontrol(threading.Thread):
@@ -313,7 +284,13 @@ class mldycontrol(threading.Thread):
 
     def run(self):
         while self.kill != 1:
-            uval = 0
+            
+            '''
+            g = g6a.getAccel()
+            mag = sum(g) / len(g)
+            
+            '''
+            
             uval = grovepi.ultrasonicRead(self.pin)
 
             if uval < US_MAX and uval >= US_MIN:
@@ -405,7 +382,6 @@ def main(threads):
             keyVal = event.message
 
         if event.type == MELODY:
-            print("MELODY event ", keyVal)
             if (keyVal in key_sound.keys()) and (not is_playing[keyVal]):
                 key_sound[keyVal].play(fade_ms=50)
                 #is_playing[keyVal] = True
@@ -455,14 +431,21 @@ def main(threads):
         
 
 
+
+MELODY_ULTRASONIC_PIN   = 2 #D2
+KICK_LDR_PIN            = 0 #A0
+KICK_LED_PIN            = 8 #D8
+SNARE_LDR_PIN           = 1 #A1
+SNARE_LED_PIN           = 7 #D7
+DRONE_PIR_PIN           = 4 #D4
+DRONE_LED_PIN           = 3 #D3
+
 if __name__ == '__main__':
 
     mldythread = mldycontrol(MELODY_ULTRASONIC_PIN)
     dronethread = dronecontrol(DRONE_PIR_PIN, DRONE_LED_PIN)
-    drumthread = drumcontrol(pirpins=(KICK_PIR_PIN, SNARE_PIR_PIN,
-                                      KICK_LED_PIN, SNARE_LED_PIN), 
-                             ldrpins=(KICK_LDR_PIN, SNARE_LDR_PIN,
-                                      KICK_LED_PIN, SNARE_LED_PIN))
+    drumthread = drumcontrol(ldrpins=(KICK_LDR_PIN, SNARE_LDR_PIN),
+                             ledpins=(KICK_LED_PIN, SNARE_LED_PIN))
 
     try:
         main({'mldythread' : mldythread, 
