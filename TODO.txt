@@ -1,0 +1,7 @@
+TODOs for next year
+ - light threshold dynamic DONE
+ - Change sounds (to increase clarity)
+ - more configurable (pins, etc.)
+ - instructions
+ - fix light triggering bug
+ - add LEDs to show triggers / activity DONE
