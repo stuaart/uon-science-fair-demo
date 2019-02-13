@@ -15,14 +15,13 @@ from scipy.io import wavfile
 import argparse
 import numpy as np
 import pygame
-import sys
 import warnings
 
 import threading
 import time
 import random
 import grovepi
-import os
+import os, sys
 
 MELODY     = pygame.USEREVENT + 1
 DRONE_ON   = pygame.USEREVENT + 3
@@ -37,14 +36,14 @@ US_MIN = 1
 CALIB_STEPS = 4
 
 
-MELODY_ULTRASONIC_PIN   = 2
-KICK_LDR_PIN            = 0
+MELODY_ULTRASONIC_PIN   = 2 #D2
+KICK_LDR_PIN            = 0 #A0
 KICK_LED_PIN            = 8 #D8
-SNARE_LDR_PIN           = 1
+SNARE_LDR_PIN           = 1 #A1
 SNARE_LED_PIN           = 7 #D7
 KICK_PIR_PIN            = 5 
 SNARE_PIR_PIN           = 6
-DRONE_PIR_PIN           = 4
+DRONE_PIR_PIN           = 4 #D4
 DRONE_LED_PIN           = 3 #D3
 
 
@@ -249,19 +248,16 @@ class drumcontrol(threading.Thread):
         qp2 = 0
         while self.kill != 1:
             # PIR kick and snare
-            p1val_ = grovepi.digitalRead(self.pirpins[0])
-            p2val_ = grovepi.digitalRead(self.pirpins[1])
+            #p1val_ = grovepi.digitalRead(self.pirpins[0])
+            #p2val_ = grovepi.digitalRead(self.pirpins[1])
             
             # LDR kick and snare
             l1val_ = 0
             l2val_ = 0
-            try:
-                l1val_ = grovepi.analogRead(self.ldrpins[0])
-                l2val_ = grovepi.analogRead(self.ldrpins[1])
-            except TypeError:
-                print("analogRead thrown TypeError")
+            l1val_ = grovepi.analogRead(self.ldrpins[0])
+            l2val_ = grovepi.analogRead(self.ldrpins[1])
 
-            print ("l1val = ", l1val_, " l2val = ", l2val_)
+            #print ("l1val = ", l1val_, " l2val = ", l2val_)
             if l1val_ < self.kmax and l1val_ > self.l1val:
                 self.l1val = l1val_
             elif self.l1val - l1val_ > self.kd:
@@ -278,7 +274,7 @@ class drumcontrol(threading.Thread):
                 print("SNARE triggered by LDR       [value: ",l2val_,"]")
                 self.l2val = l2val_
 
-            if p1val == [0, 0] and p1val_ == 1:
+            '''if p1val == [0, 0] and p1val_ == 1:
                 pygame.event.post(pygame.event.Event(KICK))
                 print("KICK triggered by PIR       [value: ",p1val_,"]")
             p1val[qp1] = p1val_
@@ -288,7 +284,7 @@ class drumcontrol(threading.Thread):
                 pygame.event.post(pygame.event.Event(SNARE))
                 print("SNARE triggered by PIR      [value: ",p2val_,"]")
             p2val[qp2] = p2val_
-            qp2 = (qp2 + 1) % 2
+            qp2 = (qp2 + 1) % 2'''
 
             time.sleep(self.res)
 
@@ -318,10 +314,7 @@ class mldycontrol(threading.Thread):
     def run(self):
         while self.kill != 1:
             uval = 0
-            try:
-               uval = grovepi.ultrasonicRead(self.pin)
-            except TypeError:
-                print("ultrasonicRead thrown TypeError")
+            uval = grovepi.ultrasonicRead(self.pin)
 
             if uval < US_MAX and uval >= US_MIN:
                 uval_ = int(((uval * (self.notes - 1)) / (US_MAX - US_MIN)) + 1)
@@ -344,11 +337,16 @@ def main(threads):
     if not args.verbose:
         warnings.simplefilter('ignore')
 
+    # Headless
+    #os.putenv('SDL_VIDEODRIVER', 'fbcon')
+    os.environ["SDL_VIDEODRIVER"] = "dummy"
+    pygame.display.init()
+    screen = pygame.display.set_mode((500, 400))
 
     fps, sound = wavfile.read(args.wavmldy.name)
     pygame.mixer.pre_init(fps, -16, 1, 2048)
     pygame.init()
-
+    print(pygame.mixer.get_init())
     # Load drone sound, and drums
     drone = pygame.mixer.Sound(args.wavdrone.name)
     kick = pygame.mixer.Sound(args.wavkick.name)
@@ -368,12 +366,6 @@ def main(threads):
     sounds = map(pygame.sndarray.make_sound, transposed_sounds)
     key_sound = dict(zip(keys, sounds))
     is_playing = {k: False for k in keys}
-
-    # For the focus
-    os.environ["SDL_VIDEODRIVER"] = "dummy"
-    screen = pygame.display.set_mode((150, 150))
-#   os.putenv('SDL_VIDEODRIVER', 'fbcon')
-#   pygame.display.init()
 
 
 
