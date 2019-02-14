@@ -1,0 +1,1 @@
+/bin/su pi -c "/usr/bin/screen -dmS synth bash -c '/home/pi/uon-science-fair-demo/start.sh; exec bash'"
