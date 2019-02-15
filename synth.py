@@ -242,8 +242,8 @@ class drumcontrol(threading.Thread):
             if l1val_ < self.kmax and l1val_ > self.l1val:
                 self.l1val = l1val_
             elif self.l1val - l1val_ > self.kd:
-                grovepi.digitalWrite(self.ledpins[0], 1)
                 pygame.event.post(pygame.event.Event(KICK))
+                #grovepi.digitalWrite(self.ledpins[0], 1)
                 print("KICK triggered by LDR       [value: ",
                         l1val_, "; delta: ", self.l1val-l1val_, "]")
                 self.l1val = l1val_
@@ -251,8 +251,8 @@ class drumcontrol(threading.Thread):
             if l2val_ < self.smax and l2val_ > self.l2val:
                 self.l2val = l2val_
             elif self.l2val - l2val_ > self.sd:
-                grovepi.digitalWrite(self.ledpins[1], 1)
                 pygame.event.post(pygame.event.Event(SNARE))
+                grovepi.digitalWrite(self.ledpins[1], 1)
                 print("SNARE triggered by LDR       [value: ",
                         l2val_, "; delta: ", self.l2val-l2val_, "]")
                 self.l2val = l2val_
@@ -441,6 +441,9 @@ DRONE_PIR_PIN           = 4 #D4
 DRONE_LED_PIN           = 3 #D3
 
 if __name__ == '__main__':
+
+    grovepi.digitalWrite(KICK_LED_PIN, 0)
+    grovepi.digitalWrite(SNARE_LED_PIN, 0)
 
     mldythread = mldycontrol(MELODY_ULTRASONIC_PIN)
     dronethread = dronecontrol(DRONE_PIR_PIN, DRONE_LED_PIN)

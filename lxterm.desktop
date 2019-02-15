@@ -1,0 +1,5 @@
+[Desktop Entry]
+Encoding=UTF-8
+Name=Terminal autostart attach to synth
+Comment=Start a terminal and attach to synth
+Exec=/usr/bin/lxterm -e '/usr/bin/screen -r synth'
