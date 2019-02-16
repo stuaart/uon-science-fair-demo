@@ -23,7 +23,7 @@ import struct
 import sys
 
 
-debug=False
+debug=True
 
 if sys.version_info<(3,0):
     p_version=2
@@ -67,7 +67,7 @@ def write_i2c_block(address, block):
             return bus.write_i2c_block_data(address, 1, block)
         except IOError:
             if debug:
-                print ("IOError")
+                print ("write_i2c_block: IOError")
     return -1
 
 # Read I2C byte
@@ -78,7 +78,7 @@ def read_i2c_byte(address):
             return bus.read_byte(address)
         except IOError:
             if debug:
-                print ("IOError")
+                print ("read_i2c_byte: IOError")
     return -1
 
 
@@ -90,7 +90,7 @@ def read_i2c_block(address):
             return bus.read_i2c_block_data(address, 1)
         except IOError:
             if debug:
-                print ("IOError")
+                print ("read_i2c_block: IOError")
     return -1
 
 def digitalRead(pin):

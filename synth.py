@@ -35,20 +35,7 @@ US_MIN = 1
 
 CALIB_STEPS = 4
 
-
-
-def calibldr(pin, lmin, lmax):
-    ls = []
-    delta = 0
-    for i in range(0, CALIB_STEPS):
-        level = grovepi.analogRead(pin)
-        if level < lmax:
-            ls.append(level)
-        else:
-            i = i - 1
-        time.sleep(0.2)
-    lmax = sum(ls) / len(ls)
-    return (lmax, ((lmax - lmin)/2))
+LOCK = threading.Lock()
 
 
 
@@ -193,18 +180,24 @@ class dronecontrol(threading.Thread):
         const = 0.1
         pvalf = 0
         while self.kill != 1:
+            LOCK.acquire()
             pval = grovepi.digitalRead(self.pin)
+            LOCK.release()
             pvalf = pvalf * (1.0-const) + pval * const
             if self.pval == 0 and pval == 1:
                 pygame.event.post(pygame.event.Event(DRONE_ON))
                 self.pval = pval
                 print("DRONE triggered        [filtered value (>=0.4): ",pvalf,"]")
+                LOCK.acquire()
                 grovepi.digitalWrite(self.ledpin, 1)
+                LOCK.release()
             elif self.pval == 1 and pval == 0 and pvalf < 0.4:
                 pygame.event.post(pygame.event.Event(DRONE_OFF))
                 self.pval = pval
                 print("DRONE off              [filtered value (<0.4): ",pvalf,"]")
+                LOCK.acquire()
                 grovepi.digitalWrite(self.ledpin, 0)
+                LOCK.release()
             time.sleep(self.res)
 
 class drumcontrol(threading.Thread): # CURRENTLY ONLY 2 LDRs MAX
@@ -218,11 +211,27 @@ class drumcontrol(threading.Thread): # CURRENTLY ONLY 2 LDRs MAX
         self.ledpins = ledpins
         self.ldrpins = ldrpins
         # Light calibration
+        LOCK.acquire()
         for pin in ldrpins:
             #lcalib.append((1000, 500))
-            self.lcalib.append(calibldr(pin, 1, 750))
+            self.lcalib.append(self.calibldr(pin, 1, 750))
             print("CALIBRATED LDR(", pin, "): lmax, delta = ", 
                     self.lcalib[-1][0], self.lcalib[-1][1])
+        LOCK.release()
+
+    def calibldr(self, pin, lmin, lmax):
+        ls = []
+        delta = 0
+        for i in range(0, CALIB_STEPS):
+            level = grovepi.analogRead(pin)
+            if level < lmax:
+                ls.append(level)
+            else:
+                i = i - 1
+            time.sleep(0.2)
+        lmax = sum(ls) / len(ls)
+        return (lmax, ((lmax - lmin)/2))
+
 
     def setres(self, res):
         self.res = res
@@ -235,15 +244,19 @@ class drumcontrol(threading.Thread): # CURRENTLY ONLY 2 LDRs MAX
         while self.kill != 1:
             
             # LDR kick and snare
+            LOCK.acquire()
             l1val_ = grovepi.analogRead(self.ldrpins[0])
             l2val_ = grovepi.analogRead(self.ldrpins[1])
+            LOCK.release()
 
             #print ("l1val = ", l1val_, " l2val = ", l2val_)
             if l1val_ < self.lcalib[0][0] and l1val_ > self.l1val:
                 self.l1val = l1val_
             elif self.l1val - l1val_ > self.lcalib[0][1]:
                 pygame.event.post(pygame.event.Event(KICK))
+                LOCK.acquire()
                 grovepi.digitalWrite(self.ledpins[1], 1)
+                LOCK.release()
                 print("KICK triggered by LDR  [value: ",
                         l1val_, "; delta: ", self.l1val-l1val_, "]")
                 self.l1val = l1val_
@@ -252,15 +265,19 @@ class drumcontrol(threading.Thread): # CURRENTLY ONLY 2 LDRs MAX
                 self.l2val = l2val_
             elif self.l2val - l2val_ > self.lcalib[1][1]:
                 pygame.event.post(pygame.event.Event(SNARE))
+                LOCK.acquire()
                 grovepi.digitalWrite(self.ledpins[0], 1)
+                LOCK.release()
                 print("SNARE triggered by LDR [value: ",
                         l2val_, "; delta: ", self.l2val-l2val_, "]")
                 self.l2val = l2val_
 
             time.sleep(self.res)
 
+            LOCK.acquire()
             for pin in self.ledpins:
                 grovepi.digitalWrite(pin, 0)
+            LOCK.release()
 
 
 class mldycontrol(threading.Thread):
@@ -291,8 +308,10 @@ class mldycontrol(threading.Thread):
             mag = sum(g) / len(g)
             
             '''
-            
+           
+            LOCK.acquire()
             uval = grovepi.ultrasonicRead(self.pin)
+            LOCK.release()
 
             if uval < US_MAX and uval >= US_MIN:
                 uval_ = int(((uval * (self.notes - 1)) / (US_MAX - US_MIN)) + 1)
@@ -329,9 +348,9 @@ def main(threads):
     drone = pygame.mixer.Sound(args.wavdrone.name)
     kick = pygame.mixer.Sound(args.wavkick.name)
     snare = pygame.mixer.Sound(args.wavsnare.name)
-    kick.set_volume(1)
-    snare.set_volume(1)
-    drone.set_volume(0.1)
+    kick.set_volume(0.2)
+    snare.set_volume(0.2)
+    drone.set_volume(0.2)
 
     
     tones = range(-int(np.floor(args.notes/2)), int(np.ceil(args.notes/2)))
@@ -352,14 +371,14 @@ def main(threads):
 
 
 
-    mldythread.setres(0.1)
+    mldythread.setres(0.05)
     mldythread.setnotes(args.notes)
     mldythread.start()
     
-    dronethread.setres(0.3)
+    dronethread.setres(0.2)
     dronethread.start()
     
-    drumthread.setres(0.3)
+    drumthread.setres(0.1)
     drumthread.start()
 
     keyVal = None
