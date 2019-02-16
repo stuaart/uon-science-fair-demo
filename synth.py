@@ -88,7 +88,8 @@ def stretch(snd_array, factor, window_size, h):
 
 def pitchshift(snd_array, n, window_size=2**13, h=2**11):
     """ Changes the pitch of a sound by ``n`` semitones. """
-    print("pitchshift,",n)
+    sys.stdout.write(".")
+    sys.stdout.flush()
     factor = 2**(1.0 * n / 12.0)
     stretched = stretch(snd_array, 1.0/factor, window_size, h)
     return speedx(stretched[window_size:], factor)
@@ -188,6 +189,7 @@ class dronecontrol(threading.Thread):
         self.kill = 1
     
     def run(self):
+        print("Starting drone control thread")
         const = 0.1
         pvalf = 0
         while self.kill != 1:
@@ -205,25 +207,22 @@ class dronecontrol(threading.Thread):
                 grovepi.digitalWrite(self.ledpin, 0)
             time.sleep(self.res)
 
-class drumcontrol(threading.Thread):
+class drumcontrol(threading.Thread): # CURRENTLY ONLY 2 LDRs MAX
     kill = 0
     l1val = 0
     l2val = 0
-    kmax = 1000
-    smax = 1000
-    sd = 500
-    kd = 500
-
+    lcalib = [] # Store tuples of (max-light-value, delta) for each ldr
+    
     def __init__(self, ldrpins, ledpins, res=0.1):
         threading.Thread.__init__(self)
         self.ledpins = ledpins
         self.ldrpins = ldrpins
-    
-    def setcalib(self, kmax, kd, smax, sd):
-        self.kmax = kmax
-        self.kd = kd
-        self.smax = smax
-        self.sd = sd
+        # Light calibration
+        for pin in ldrpins:
+            #lcalib.append((1000, 500))
+            self.lcalib.append(calibldr(pin, 1, 750))
+            print("CALIBRATED LDR(", pin, "): lmax, delta = ", 
+                    self.lcalib[-1][0], self.lcalib[-1][1])
 
     def setres(self, res):
         self.res = res
@@ -232,6 +231,7 @@ class drumcontrol(threading.Thread):
         self.kill = 1
     
     def run(self):
+        print("Starting drum control thread")
         while self.kill != 1:
             
             # LDR kick and snare
@@ -239,21 +239,21 @@ class drumcontrol(threading.Thread):
             l2val_ = grovepi.analogRead(self.ldrpins[1])
 
             #print ("l1val = ", l1val_, " l2val = ", l2val_)
-            if l1val_ < self.kmax and l1val_ > self.l1val:
+            if l1val_ < self.lcalib[0][0] and l1val_ > self.l1val:
                 self.l1val = l1val_
-            elif self.l1val - l1val_ > self.kd:
+            elif self.l1val - l1val_ > self.lcalib[0][1]:
                 pygame.event.post(pygame.event.Event(KICK))
-                grovepi.digitalWrite(self.ledpins[0], 1)
-                print("KICK triggered by LDR       [value: ",
+                grovepi.digitalWrite(self.ledpins[1], 1)
+                print("KICK triggered by LDR  [value: ",
                         l1val_, "; delta: ", self.l1val-l1val_, "]")
                 self.l1val = l1val_
 
-            if l2val_ < self.smax and l2val_ > self.l2val:
+            if l2val_ < self.lcalib[1][0] and l2val_ > self.l2val:
                 self.l2val = l2val_
-            elif self.l2val - l2val_ > self.sd:
+            elif self.l2val - l2val_ > self.lcalib[1][1]:
                 pygame.event.post(pygame.event.Event(SNARE))
-                grovepi.digitalWrite(self.ledpins[1], 1)
-                print("SNARE triggered by LDR       [value: ",
+                grovepi.digitalWrite(self.ledpins[0], 1)
+                print("SNARE triggered by LDR [value: ",
                         l2val_, "; delta: ", self.l2val-l2val_, "]")
                 self.l2val = l2val_
 
@@ -283,6 +283,7 @@ class mldycontrol(threading.Thread):
         return self.uval
 
     def run(self):
+        print("Starting melody control thread")
         while self.kill != 1:
             
             '''
@@ -295,7 +296,7 @@ class mldycontrol(threading.Thread):
 
             if uval < US_MAX and uval >= US_MIN:
                 uval_ = int(((uval * (self.notes - 1)) / (US_MAX - US_MIN)) + 1)
-                print("MELODY note: ",uval_, "      [raw value: ",uval,"]")
+                print("MELODY note ",uval_, "       [raw value: ",uval,"]")
                 if uval_ != self.uval:
                     self.uval = uval_
                     pygame.event.post(pygame.event.Event(MELODY, message=str(self.uval)))
@@ -323,7 +324,7 @@ def main(threads):
     fps, sound = wavfile.read(args.wavmldy.name)
     pygame.mixer.pre_init(fps, -16, 1, 2048)
     pygame.init()
-    print(pygame.mixer.get_init())
+    print("pygame mixer status: ", pygame.mixer.get_init())
     # Load drone sound, and drums
     drone = pygame.mixer.Sound(args.wavdrone.name)
     kick = pygame.mixer.Sound(args.wavkick.name)
@@ -334,10 +335,9 @@ def main(threads):
 
     
     tones = range(-int(np.floor(args.notes/2)), int(np.ceil(args.notes/2)))
-    sys.stdout.write('Transposing sound file... ')
-    sys.stdout.flush()
+    print("Transposing sound to create ", args.notes, " notes")
     transposed_sounds = [pitchshift(sound, n) for n in tones]
-    print('DONE')
+    print("Done")
 
     keys = args.keyboard.read().split('\n')
     sounds = map(pygame.sndarray.make_sound, transposed_sounds)
@@ -351,13 +351,6 @@ def main(threads):
     drumthread = threads['drumthread']
 
 
-    # Light calibration
-    (kmax, kd) = calibldr(KICK_LDR_PIN, 1, 750)
-    print("lmax, delta = ", kmax, kd)
-
-    (smax, sd) = calibldr(SNARE_LDR_PIN, 1, 750)
-    print("lmax, delta = ", smax, sd)
-
 
     mldythread.setres(0.1)
     mldythread.setnotes(args.notes)
@@ -367,7 +360,6 @@ def main(threads):
     dronethread.start()
     
     drumthread.setres(0.3)
-    drumthread.setcalib(kmax, kd, smax, sd)
     drumthread.start()
 
     keyVal = None
@@ -442,9 +434,16 @@ DRONE_LED_PIN           = 3 #D3
 
 if __name__ == '__main__':
 
+    print("")
+    print("Starting Gesture Synth")
+
     for pin in [KICK_LED_PIN, SNARE_LED_PIN, DRONE_LED_PIN]:
         grovepi.pinMode(pin, "OUTPUT")
         grovepi.digitalWrite(pin, 0)
+
+    for pin in [MELODY_ULTRASONIC_PIN, KICK_LDR_PIN, SNARE_LDR_PIN,
+                DRONE_PIR_PIN]:
+        grovepi.pinMode(pin, "INPUT")
 
     mldythread = mldycontrol(MELODY_ULTRASONIC_PIN)
     dronethread = dronecontrol(DRONE_PIR_PIN, DRONE_LED_PIN)
